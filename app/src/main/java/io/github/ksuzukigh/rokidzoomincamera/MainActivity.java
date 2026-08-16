@@ -28,6 +28,7 @@ import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.BatteryManager;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
@@ -71,6 +72,7 @@ public final class MainActivity extends Activity {
     private TextView zoomLabel;
     private TextView statusLabel;
     private TextView recordingIndicator;
+    private TextView batteryLabel;
     private HandlerThread cameraThread;
     private Handler cameraHandler;
     private CameraDevice camera;
@@ -92,6 +94,7 @@ public final class MainActivity extends Activity {
     private boolean stopVideoRequested;
     private boolean stopVideoScheduled;
     private boolean buttonReceiverRegistered;
+    private boolean batteryReceiverRegistered;
     private boolean userLeaving;
     private long videoStartedAt;
     private boolean longPressHandled;
@@ -159,6 +162,21 @@ public final class MainActivity extends Activity {
         }
     };
 
+    private final BroadcastReceiver batteryReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS,
+                    BatteryManager.BATTERY_STATUS_UNKNOWN);
+            boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL;
+            int percent = BatteryDisplay.percentage(level, scale);
+            if (batteryLabel != null) {
+                batteryLabel.setText(BatteryDisplay.label(percent, charging));
+            }
+        }
+    };
+
     private final TextureView.SurfaceTextureListener surfaceListener = new TextureView.SurfaceTextureListener() {
         @Override public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
             configureTransform(width, height);
@@ -211,6 +229,23 @@ public final class MainActivity extends Activity {
         zoomParams.topMargin = dp(10);
         root.addView(zoomLabel, zoomParams);
 
+        batteryLabel = new TextView(this);
+        batteryLabel.setText("電池 --%");
+        batteryLabel.setTextColor(Color.WHITE);
+        batteryLabel.setTextSize(15);
+        batteryLabel.setGravity(Gravity.CENTER);
+        batteryLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+        batteryLabel.setShadowLayer(6f, 0f, 2f, Color.BLACK);
+        GradientDrawable batteryBackground = new GradientDrawable();
+        batteryBackground.setColor(Color.argb(165, 0, 0, 0));
+        batteryBackground.setCornerRadius(dp(12));
+        batteryLabel.setBackground(batteryBackground);
+        FrameLayout.LayoutParams batteryParams = new FrameLayout.LayoutParams(
+                dp(150), dp(42), Gravity.TOP | Gravity.END);
+        batteryParams.topMargin = dp(10);
+        batteryParams.rightMargin = dp(14);
+        root.addView(batteryLabel, batteryParams);
+
         recordingIndicator = new TextView(this);
         recordingIndicator.setText("録画中 00:00");
         recordingIndicator.setTextColor(Color.WHITE);
@@ -224,7 +259,7 @@ public final class MainActivity extends Activity {
         recordingIndicator.setVisibility(View.GONE);
         FrameLayout.LayoutParams recordingParams = new FrameLayout.LayoutParams(
                 dp(155), dp(52), Gravity.TOP | Gravity.END);
-        recordingParams.topMargin = dp(14);
+        recordingParams.topMargin = dp(60);
         recordingParams.rightMargin = dp(14);
         root.addView(recordingIndicator, recordingParams);
 
@@ -247,6 +282,7 @@ public final class MainActivity extends Activity {
         userLeaving = false;
         startCameraThread();
         registerButtonReceiver();
+        registerBatteryReceiver();
         sendSafetyAction(ButtonSafetyService.ACTION_CLAIM);
         mainHandler.removeCallbacks(heartbeat);
         mainHandler.post(heartbeat);
@@ -267,6 +303,7 @@ public final class MainActivity extends Activity {
         }
         mainHandler.removeCallbacks(heartbeat);
         unregisterButtonReceiver();
+        unregisterBatteryReceiver();
         if (recording) {
             if (recorderStarted) finishVideoNow();
             else abortVideo();
@@ -298,6 +335,7 @@ public final class MainActivity extends Activity {
         }
         closeCamera();
         unregisterButtonReceiver();
+        unregisterBatteryReceiver();
         sendSafetyAction(ButtonSafetyService.ACTION_RELEASE);
         stopCameraThread();
         releaseRecordingWakeLock();
@@ -327,6 +365,28 @@ public final class MainActivity extends Activity {
             registerReceiver(buttonReceiver, filter);
             buttonReceiverRegistered = true;
         } catch (RuntimeException ignored) {}
+    }
+
+    private void registerBatteryReceiver() {
+        if (batteryReceiverRegistered) return;
+        try {
+            Intent sticky = registerReceiver(batteryReceiver,
+                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            batteryReceiverRegistered = true;
+            if (sticky != null) batteryReceiver.onReceive(this, sticky);
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Battery status receiver registration failed", error);
+        }
+    }
+
+    private void unregisterBatteryReceiver() {
+        if (!batteryReceiverRegistered) return;
+        try {
+            unregisterReceiver(batteryReceiver);
+        } catch (IllegalArgumentException ignored) {
+        } finally {
+            batteryReceiverRegistered = false;
+        }
     }
 
     private void unregisterButtonReceiver() {
