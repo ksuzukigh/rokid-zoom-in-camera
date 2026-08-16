@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Rokid ZOOM IN CAMERA</string>
+    <string name="safety_channel">カメラボタンの安全管理</string>
+    <string name="safety_notification">ZOOM IN CAMERAのボタンを管理中</string>
+</resources>

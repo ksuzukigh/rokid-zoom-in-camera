@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+def releaseKeystorePath = System.getenv('ROKID_RELEASE_KEYSTORE') ?:
+        System.getProperty('user.home') + '/rokid-release.jks'
+def releaseStorePassword = System.getenv('ROKID_STORE_PASSWORD')
+def releaseKeyPassword = System.getenv('ROKID_KEY_PASSWORD')
+
+android {
+    namespace 'io.github.ksuzukigh.rokidzoomincamera'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'io.github.ksuzukigh.rokidzoomincamera'
+        minSdk 32
+        targetSdk 32
+        versionCode 100
+        versionName '1.0.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(releaseKeystorePath)
+            storePassword releaseStorePassword
+            keyAlias 'rokid'
+            keyPassword releaseKeyPassword
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+    }
+
+    lint {
+        disable 'ExpiredTargetSdkVersion'
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
