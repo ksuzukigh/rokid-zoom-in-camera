@@ -12,7 +12,6 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.camera2.CameraAccessException;
@@ -68,6 +67,7 @@ public final class MainActivity extends Activity {
     private static final String BUTTON_VERY_LONG = "com.android.action.ACTION_SPRITE_BUTTON_VERY_VERY_LONG_PRESS";
 
     private final Handler mainHandler = new Handler();
+    private FrameLayout root;
     private TextureView preview;
     private TextView zoomLabel;
     private TextView statusLabel;
@@ -210,7 +210,7 @@ public final class MainActivity extends Activity {
     }
 
     private void buildScreen() {
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         root.setOnTouchListener((view, event) -> handleTouch(event));
         preview = new TextureView(this);
@@ -483,6 +483,7 @@ public final class MainActivity extends Activity {
         try {
             if (session != null) session.close();
             texture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
+            runOnUiThread(this::configurePreviewLayout);
             Surface surface = new Surface(texture);
             repeatingBuilder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             repeatingBuilder.addTarget(surface);
@@ -643,6 +644,7 @@ public final class MainActivity extends Activity {
 
             session.close();
             texture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
+            runOnUiThread(this::configurePreviewLayout);
             Surface previewSurface = new Surface(texture);
             Surface recordSurface = recorder.getSurface();
             repeatingBuilder = device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
@@ -885,22 +887,42 @@ public final class MainActivity extends Activity {
     }
 
     private void configureTransform(int viewWidth, int viewHeight) {
-        if (previewSize == null || viewWidth == 0 || viewHeight == 0) return;
+        configurePreviewLayout();
+    }
+
+    private void configurePreviewLayout() {
+        if (previewSize == null || preview == null || root == null) return;
+        int viewWidth = root.getWidth();
+        int viewHeight = root.getHeight();
+        if (viewWidth == 0 || viewHeight == 0) {
+            root.post(this::configurePreviewLayout);
+            return;
+        }
         int displayDegrees = rotationDegrees(getDisplay().getRotation());
         int rotation = (sensorOrientation - displayDegrees + 360) % 360;
         boolean swapped = rotation == 90 || rotation == 270;
-        float bufferWidth = swapped ? previewSize.getHeight() : previewSize.getWidth();
-        float bufferHeight = swapped ? previewSize.getWidth() : previewSize.getHeight();
-        float scale = Math.max(viewWidth / bufferWidth, viewHeight / bufferHeight);
-        Matrix matrix = new Matrix();
-        RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
-        RectF bufferRect = new RectF(0, 0, bufferWidth, bufferHeight);
-        bufferRect.offset(viewRect.centerX() - bufferRect.centerX(), viewRect.centerY() - bufferRect.centerY());
-        matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
-        matrix.postScale(scale, scale, viewRect.centerX(), viewRect.centerY());
-        // RV101/YodaOS already presents the camera buffer in the display's natural
-        // orientation. Rotating it again here makes the live image appear sideways.
-        preview.setTransform(matrix);
+        PreviewGeometry.Layout layout = PreviewGeometry.centerCrop(
+                viewWidth,
+                viewHeight,
+                previewSize.getWidth(),
+                previewSize.getHeight(),
+                swapped
+        );
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) preview.getLayoutParams();
+        if (params.width != layout.width || params.height != layout.height ||
+                params.gravity != Gravity.CENTER) {
+            params.width = layout.width;
+            params.height = layout.height;
+            params.gravity = Gravity.CENTER;
+            preview.setLayoutParams(params);
+        }
+        // RV101/YodaOS presents the camera buffer in the display's natural
+        // orientation. Match the view to that aspect ratio and let the root crop
+        // only the excess edges; never stretch width and height independently.
+        preview.setTransform(new Matrix());
+        Log.d(TAG, "Preview layout root=" + viewWidth + "x" + viewHeight +
+                " buffer=" + previewSize.getWidth() + "x" + previewSize.getHeight() +
+                " swapped=" + swapped + " child=" + layout.width + "x" + layout.height);
     }
 
     private int jpegOrientation() {
@@ -917,11 +939,21 @@ public final class MainActivity extends Activity {
 
     private static Size choosePreviewSize(Size[] sizes) {
         List<Size> candidates = new ArrayList<>();
+        List<Size> hudRatioCandidates = new ArrayList<>();
         for (Size size : sizes) {
             long pixels = (long) size.getWidth() * size.getHeight();
-            if (pixels <= 1920L * 1080L && pixels >= 640L * 480L) candidates.add(size);
+            if (pixels <= 1920L * 1080L && pixels >= 640L * 480L) {
+                candidates.add(size);
+                float ratio = (float) Math.max(size.getWidth(), size.getHeight()) /
+                        Math.min(size.getWidth(), size.getHeight());
+                if (Math.abs(ratio - 4f / 3f) < 0.03f) hudRatioCandidates.add(size);
+            }
         }
         if (candidates.isEmpty()) candidates.addAll(Arrays.asList(sizes));
+        // RV101's physical HUD is 480x640 (3:4 portrait). Prefer a 4:3 camera
+        // stream so YodaOS can present it at the native HUD ratio without any
+        // non-uniform scaling. The device provides 1600x1200 for this purpose.
+        if (!hudRatioCandidates.isEmpty()) candidates = hudRatioCandidates;
         return Collections.max(candidates, Comparator.comparingLong(size -> (long) size.getWidth() * size.getHeight()));
     }
 

@@ -2,13 +2,14 @@
 
 Rokid AI Glasses RV101の広角カメラを、見たい範囲へ寄せて使うズームカメラです。
 
-**現在のバージョン: 1.0.0**
+**現在のバージョン: 1.0.1**
 
 [Rokid ZOOM IN CAMERAの最新版をダウンロード](https://github.com/ksuzukigh/rokid-zoom-in-camera/releases/latest/download/Rokid-ZOOM-IN-CAMERA.zip)
 
 ## できること
 
 - カメラ映像を1.0 / 1.5 / 2.0 / 3.0 / 4.0倍で表示
+- カメラ映像の縦横比を保ち、画面に合わせて余分な端だけを切り取って表示
 - テンプルのボタンで写真撮影
 - 音声の入らない動画撮影
 - 眼鏡本体の電池残量をリアルタイム表示
