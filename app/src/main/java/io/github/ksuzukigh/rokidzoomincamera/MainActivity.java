@@ -491,7 +491,7 @@ public final class MainActivity extends Activity {
                     session = value;
                     try {
                         value.setRepeatingRequest(repeatingBuilder.build(), null, cameraHandler);
-                        setStatus("写真：ボタン1回　動画：長押し（音声あり）\n倍率：左右へスワイプ");
+                        setStatus("写真：1回　動画：長押し・音声あり\n倍率：左右へスワイプ");
                         if (videoStartPending) runOnUiThread(MainActivity.this::startVideo);
                     } catch (CameraAccessException error) {
                         setStatus("映像を開始できませんでした");
@@ -602,7 +602,7 @@ public final class MainActivity extends Activity {
         } finally {
             takingPhoto = false;
             mainHandler.postDelayed(() -> {
-                if (!recording && resumed) setStatus("写真：ボタン1回　動画：長押し（音声あり）\n倍率：左右へスワイプ");
+                if (!recording && resumed) setStatus("写真：1回　動画：長押し・音声あり\n倍率：左右へスワイプ");
             }, 1400L);
         }
     }
