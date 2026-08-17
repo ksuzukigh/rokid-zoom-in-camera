@@ -60,6 +60,7 @@ import java.util.Locale;
 public final class MainActivity extends Activity {
     private static final String TAG = "RokidZoomInCamera";
     private static final int CAMERA_PERMISSION = 7;
+    private static final int AUDIO_PERMISSION = 8;
     private static final float[] ZOOM_STEPS = {1f, 1.5f, 2f, 3f, 4f};
     private static final String BUTTON_DOWN = "com.android.action.ACTION_SPRITE_BUTTON_DOWN";
     private static final String BUTTON_UP = "com.android.action.ACTION_SPRITE_BUTTON_UP";
@@ -93,6 +94,7 @@ public final class MainActivity extends Activity {
     private boolean recorderStarted;
     private boolean stopVideoRequested;
     private boolean stopVideoScheduled;
+    private boolean videoStartPending;
     private boolean buttonReceiverRegistered;
     private boolean batteryReceiverRegistered;
     private boolean userLeaving;
@@ -115,15 +117,7 @@ public final class MainActivity extends Activity {
             if (!recording || !recorderStarted || recordingIndicator == null) return;
             long seconds = Math.max(0L,
                     (SystemClock.elapsedRealtime() - videoStartedAt) / 1000L);
-            String elapsed;
-            if (seconds >= 3600L) {
-                elapsed = String.format(Locale.JAPAN, "%d:%02d:%02d",
-                        seconds / 3600L, (seconds / 60L) % 60L, seconds % 60L);
-            } else {
-                elapsed = String.format(Locale.JAPAN, "%02d:%02d",
-                        seconds / 60L, seconds % 60L);
-            }
-            recordingIndicator.setText("録画中 " + elapsed);
+            recordingIndicator.setText(RecordingDisplay.label(seconds));
             mainHandler.postDelayed(this, 1000L);
         }
     };
@@ -247,9 +241,9 @@ public final class MainActivity extends Activity {
         root.addView(batteryLabel, batteryParams);
 
         recordingIndicator = new TextView(this);
-        recordingIndicator.setText("録画中 00:00");
+        recordingIndicator.setText(RecordingDisplay.label(0L));
         recordingIndicator.setTextColor(Color.WHITE);
-        recordingIndicator.setTextSize(16);
+        recordingIndicator.setTextSize(14);
         recordingIndicator.setGravity(Gravity.CENTER);
         recordingIndicator.setTypeface(null, android.graphics.Typeface.BOLD);
         GradientDrawable recordingBackground = new GradientDrawable();
@@ -258,7 +252,7 @@ public final class MainActivity extends Activity {
         recordingIndicator.setBackground(recordingBackground);
         recordingIndicator.setVisibility(View.GONE);
         FrameLayout.LayoutParams recordingParams = new FrameLayout.LayoutParams(
-                dp(155), dp(52), Gravity.TOP | Gravity.END);
+                dp(175), dp(62), Gravity.TOP | Gravity.END);
         recordingParams.topMargin = dp(60);
         recordingParams.rightMargin = dp(14);
         root.addView(recordingIndicator, recordingParams);
@@ -316,15 +310,18 @@ public final class MainActivity extends Activity {
 
     @Override protected void onUserLeaveHint() {
         userLeaving = true;
+        videoStartPending = false;
         super.onUserLeaveHint();
     }
 
     @Override public void onBackPressed() {
         userLeaving = true;
+        videoStartPending = false;
         super.onBackPressed();
     }
 
     @Override protected void onDestroy() {
+        videoStartPending = false;
         mainHandler.removeCallbacks(heartbeat);
         mainHandler.removeCallbacks(finishVideo);
         mainHandler.removeCallbacks(wakeDisplay);
@@ -494,7 +491,8 @@ public final class MainActivity extends Activity {
                     session = value;
                     try {
                         value.setRepeatingRequest(repeatingBuilder.build(), null, cameraHandler);
-                        setStatus("写真：ボタン1回　動画：長押し\n倍率：左右へスワイプ");
+                        setStatus("写真：ボタン1回　動画：長押し（音声あり）\n倍率：左右へスワイプ");
+                        if (videoStartPending) runOnUiThread(MainActivity.this::startVideo);
                     } catch (CameraAccessException error) {
                         setStatus("映像を開始できませんでした");
                     }
@@ -604,15 +602,27 @@ public final class MainActivity extends Activity {
         } finally {
             takingPhoto = false;
             mainHandler.postDelayed(() -> {
-                if (!recording && resumed) setStatus("写真：ボタン1回　動画：長押し\n倍率：左右へスワイプ");
+                if (!recording && resumed) setStatus("写真：ボタン1回　動画：長押し（音声あり）\n倍率：左右へスワイプ");
             }, 1400L);
         }
     }
 
     private void startVideo() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            videoStartPending = true;
+            setStatus("動画撮影にはマイクの許可が必要です");
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
+        }
         CameraDevice device = camera;
         SurfaceTexture texture = preview.getSurfaceTexture();
-        if (device == null || session == null || texture == null || recording || videoSize == null) return;
+        if (recording) return;
+        if (device == null || session == null || texture == null || videoSize == null) {
+            videoStartPending = true;
+            setStatus("動画を準備中…");
+            return;
+        }
+        videoStartPending = false;
         recording = true;
         recorderStarted = false;
         stopVideoRequested = false;
@@ -632,9 +642,14 @@ public final class MainActivity extends Activity {
             videoFile = getContentResolver().openFileDescriptor(pendingVideo, "w");
             if (videoFile == null) throw new IllegalStateException("MediaStore file failed");
             recorder = new MediaRecorder();
+            recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
             recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             recorder.setOutputFile(videoFile.getFileDescriptor());
+            recorder.setAudioEncodingBitRate(128_000);
+            recorder.setAudioSamplingRate(48_000);
+            recorder.setAudioChannels(1);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             recorder.setVideoEncodingBitRate(10_000_000);
             recorder.setVideoFrameRate(30);
             recorder.setVideoSize(videoSize.getWidth(), videoSize.getHeight());
@@ -663,7 +678,7 @@ public final class MainActivity extends Activity {
                             recorderStarted = true;
                             videoStartedAt = SystemClock.elapsedRealtime();
                             Log.d(TAG, "Video recording started; stopRequested=" + stopVideoRequested);
-                            recordingIndicator.setText("録画中 00:00");
+                            recordingIndicator.setText(RecordingDisplay.label(0L));
                             recordingIndicator.setVisibility(View.VISIBLE);
                             mainHandler.removeCallbacks(updateRecordingClock);
                             mainHandler.post(updateRecordingClock);
@@ -703,6 +718,7 @@ public final class MainActivity extends Activity {
     private void finishVideoNow() {
         mainHandler.removeCallbacks(finishVideo);
         stopVideoScheduled = false;
+        videoStartPending = false;
         if (!recording || !recorderStarted) return;
         recording = false;
         recorderStarted = false;
@@ -732,6 +748,7 @@ public final class MainActivity extends Activity {
             recorderStarted = false;
             stopVideoRequested = false;
             stopVideoScheduled = false;
+            videoStartPending = false;
             releaseRecorder(false);
             releaseRecordingWakeLock();
             releaseDisplayWakeLock();
@@ -748,6 +765,7 @@ public final class MainActivity extends Activity {
         recorderStarted = false;
         stopVideoRequested = false;
         stopVideoScheduled = false;
+        videoStartPending = false;
         releaseRecorder(false);
         releaseRecordingWakeLock();
         releaseDisplayWakeLock();
@@ -879,10 +897,22 @@ public final class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (requestCode == CAMERA_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-            openCamera();
-        } else {
-            setStatus("カメラの許可が必要です");
+        if (requestCode == CAMERA_PERMISSION) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                openCamera();
+            } else {
+                setStatus("カメラの許可が必要です");
+            }
+            return;
+        }
+        if (requestCode == AUDIO_PERMISSION) {
+            boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                startVideo();
+            } else {
+                videoStartPending = false;
+                setStatus("動画撮影にはマイクの許可が必要です");
+            }
         }
     }
 
