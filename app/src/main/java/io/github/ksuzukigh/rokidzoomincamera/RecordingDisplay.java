@@ -15,6 +15,6 @@ final class RecordingDisplay {
             elapsed = String.format(Locale.JAPAN, "%02d:%02d",
                     seconds / 60L, seconds % 60L);
         }
-        return "録画中・音声あり\n" + elapsed;
+        return "録画中 " + elapsed;
     }
 }
