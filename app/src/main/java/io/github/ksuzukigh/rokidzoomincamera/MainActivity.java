@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
     private static final String TAG = "RokidZoomInCamera";
     private static final int CAMERA_PERMISSION = 7;
     private static final int AUDIO_PERMISSION = 8;
+    private static final long TOUCH_BUTTON_SUPPRESSION_MS = 1200L;
     private static final float[] ZOOM_STEPS = {1f, 1.5f, 2f, 3f, 4f};
     private static final String BUTTON_DOWN = "com.android.action.ACTION_SPRITE_BUTTON_DOWN";
     private static final String BUTTON_UP = "com.android.action.ACTION_SPRITE_BUTTON_UP";
@@ -103,7 +104,7 @@ public final class MainActivity extends Activity {
     private long buttonDownAt;
     private float touchDownX;
     private float touchDownY;
-    private boolean touchLongActivated;
+    private long lastTouchEventAt = -1L;
     private MediaRecorder recorder;
     private Uri pendingVideo;
     private ParcelFileDescriptor videoFile;
@@ -122,11 +123,6 @@ public final class MainActivity extends Activity {
         }
     };
 
-    private final Runnable touchLongPress = () -> {
-        touchLongActivated = true;
-        startVideo();
-    };
-
     private final Runnable heartbeat = new Runnable() {
         @Override public void run() {
             if (!resumed && !recording) return;
@@ -138,6 +134,12 @@ public final class MainActivity extends Activity {
     private final BroadcastReceiver buttonReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
+            long eventAt = SystemClock.elapsedRealtime();
+            if (TouchButtonGuard.shouldIgnore(lastTouchEventAt, eventAt,
+                    TOUCH_BUTTON_SUPPRESSION_MS)) {
+                Log.d(TAG, "Ignoring touch-derived button action=" + action);
+                return;
+            }
             if (BUTTON_DOWN.equals(action)) {
                 buttonDownAt = SystemClock.elapsedRealtime();
                 longPressHandled = false;
@@ -826,41 +828,22 @@ public final class MainActivity extends Activity {
     }
 
     private boolean handleTouch(MotionEvent event) {
+        lastTouchEventAt = SystemClock.elapsedRealtime();
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             touchDownX = event.getX();
             touchDownY = event.getY();
-            touchLongActivated = false;
-            mainHandler.removeCallbacks(touchLongPress);
-            mainHandler.postDelayed(touchLongPress, 700L);
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
-            if (Math.abs(event.getX() - touchDownX) > dp(22) ||
-                    Math.abs(event.getY() - touchDownY) > dp(22)) {
-                mainHandler.removeCallbacks(touchLongPress);
-            }
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-            mainHandler.removeCallbacks(touchLongPress);
-            float dx = event.getX() - touchDownX;
-            float dy = event.getY() - touchDownY;
-            if (touchLongActivated) {
-                // A long press starts recording. Releasing it must not stop the video;
-                // the next short press is the deliberate stop action.
-            } else if (recording) {
-                stopVideo();
-            } else if (Math.abs(dx) > dp(55) && Math.abs(dx) > Math.abs(dy)) {
-                changeZoom(dx > 0 ? 1 : -1);
-            } else if (Math.abs(dx) < dp(18) && Math.abs(dy) < dp(18)) {
-                takePhoto();
-            }
+            int delta = TouchGesture.zoomDelta(touchDownX, touchDownY,
+                    event.getX(), event.getY(), dp(55), recording);
+            if (delta != 0) changeZoom(delta);
             return true;
         }
-        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-            mainHandler.removeCallbacks(touchLongPress);
-            return true;
-        }
+        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) return true;
         return true;
     }
 
