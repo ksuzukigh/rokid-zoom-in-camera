@@ -60,6 +60,8 @@ import java.util.Locale;
 public final class MainActivity extends Activity {
     private static final String TAG = "RokidZoomInCamera";
     private static final int CAMERA_PERMISSION = 7;
+    private static final int AUDIO_PERMISSION = 8;
+    private static final long TOUCH_BUTTON_SUPPRESSION_MS = 1200L;
     private static final float[] ZOOM_STEPS = {1f, 1.5f, 2f, 3f, 4f};
     private static final String BUTTON_DOWN = "com.android.action.ACTION_SPRITE_BUTTON_DOWN";
     private static final String BUTTON_UP = "com.android.action.ACTION_SPRITE_BUTTON_UP";
@@ -93,6 +95,7 @@ public final class MainActivity extends Activity {
     private boolean recorderStarted;
     private boolean stopVideoRequested;
     private boolean stopVideoScheduled;
+    private boolean videoStartPending;
     private boolean buttonReceiverRegistered;
     private boolean batteryReceiverRegistered;
     private boolean userLeaving;
@@ -101,7 +104,7 @@ public final class MainActivity extends Activity {
     private long buttonDownAt;
     private float touchDownX;
     private float touchDownY;
-    private boolean touchLongActivated;
+    private long lastTouchEventAt = -1L;
     private MediaRecorder recorder;
     private Uri pendingVideo;
     private ParcelFileDescriptor videoFile;
@@ -115,22 +118,9 @@ public final class MainActivity extends Activity {
             if (!recording || !recorderStarted || recordingIndicator == null) return;
             long seconds = Math.max(0L,
                     (SystemClock.elapsedRealtime() - videoStartedAt) / 1000L);
-            String elapsed;
-            if (seconds >= 3600L) {
-                elapsed = String.format(Locale.JAPAN, "%d:%02d:%02d",
-                        seconds / 3600L, (seconds / 60L) % 60L, seconds % 60L);
-            } else {
-                elapsed = String.format(Locale.JAPAN, "%02d:%02d",
-                        seconds / 60L, seconds % 60L);
-            }
-            recordingIndicator.setText("録画中 " + elapsed);
+            recordingIndicator.setText(RecordingDisplay.label(seconds));
             mainHandler.postDelayed(this, 1000L);
         }
-    };
-
-    private final Runnable touchLongPress = () -> {
-        touchLongActivated = true;
-        startVideo();
     };
 
     private final Runnable heartbeat = new Runnable() {
@@ -144,6 +134,12 @@ public final class MainActivity extends Activity {
     private final BroadcastReceiver buttonReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
+            long eventAt = SystemClock.elapsedRealtime();
+            if (TouchButtonGuard.shouldIgnore(lastTouchEventAt, eventAt,
+                    TOUCH_BUTTON_SUPPRESSION_MS)) {
+                Log.d(TAG, "Ignoring touch-derived button action=" + action);
+                return;
+            }
             if (BUTTON_DOWN.equals(action)) {
                 buttonDownAt = SystemClock.elapsedRealtime();
                 longPressHandled = false;
@@ -247,7 +243,7 @@ public final class MainActivity extends Activity {
         root.addView(batteryLabel, batteryParams);
 
         recordingIndicator = new TextView(this);
-        recordingIndicator.setText("録画中 00:00");
+        recordingIndicator.setText(RecordingDisplay.label(0L));
         recordingIndicator.setTextColor(Color.WHITE);
         recordingIndicator.setTextSize(16);
         recordingIndicator.setGravity(Gravity.CENTER);
@@ -316,15 +312,18 @@ public final class MainActivity extends Activity {
 
     @Override protected void onUserLeaveHint() {
         userLeaving = true;
+        videoStartPending = false;
         super.onUserLeaveHint();
     }
 
     @Override public void onBackPressed() {
         userLeaving = true;
+        videoStartPending = false;
         super.onBackPressed();
     }
 
     @Override protected void onDestroy() {
+        videoStartPending = false;
         mainHandler.removeCallbacks(heartbeat);
         mainHandler.removeCallbacks(finishVideo);
         mainHandler.removeCallbacks(wakeDisplay);
@@ -494,7 +493,8 @@ public final class MainActivity extends Activity {
                     session = value;
                     try {
                         value.setRepeatingRequest(repeatingBuilder.build(), null, cameraHandler);
-                        setStatus("写真：ボタン1回　動画：長押し\n倍率：左右へスワイプ");
+                        setStatus("写真：ボタン1回　動画：長押し\nズーム倍率：左右へスワイプ");
+                        if (videoStartPending) runOnUiThread(MainActivity.this::startVideo);
                     } catch (CameraAccessException error) {
                         setStatus("映像を開始できませんでした");
                     }
@@ -604,15 +604,27 @@ public final class MainActivity extends Activity {
         } finally {
             takingPhoto = false;
             mainHandler.postDelayed(() -> {
-                if (!recording && resumed) setStatus("写真：ボタン1回　動画：長押し\n倍率：左右へスワイプ");
+                if (!recording && resumed) setStatus("写真：ボタン1回　動画：長押し\nズーム倍率：左右へスワイプ");
             }, 1400L);
         }
     }
 
     private void startVideo() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            videoStartPending = true;
+            setStatus("動画撮影にはマイクの許可が必要です");
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
+        }
         CameraDevice device = camera;
         SurfaceTexture texture = preview.getSurfaceTexture();
-        if (device == null || session == null || texture == null || recording || videoSize == null) return;
+        if (recording) return;
+        if (device == null || session == null || texture == null || videoSize == null) {
+            videoStartPending = true;
+            setStatus("動画を準備中…");
+            return;
+        }
+        videoStartPending = false;
         recording = true;
         recorderStarted = false;
         stopVideoRequested = false;
@@ -632,9 +644,14 @@ public final class MainActivity extends Activity {
             videoFile = getContentResolver().openFileDescriptor(pendingVideo, "w");
             if (videoFile == null) throw new IllegalStateException("MediaStore file failed");
             recorder = new MediaRecorder();
+            recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
             recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             recorder.setOutputFile(videoFile.getFileDescriptor());
+            recorder.setAudioEncodingBitRate(128_000);
+            recorder.setAudioSamplingRate(48_000);
+            recorder.setAudioChannels(1);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             recorder.setVideoEncodingBitRate(10_000_000);
             recorder.setVideoFrameRate(30);
             recorder.setVideoSize(videoSize.getWidth(), videoSize.getHeight());
@@ -663,7 +680,7 @@ public final class MainActivity extends Activity {
                             recorderStarted = true;
                             videoStartedAt = SystemClock.elapsedRealtime();
                             Log.d(TAG, "Video recording started; stopRequested=" + stopVideoRequested);
-                            recordingIndicator.setText("録画中 00:00");
+                            recordingIndicator.setText(RecordingDisplay.label(0L));
                             recordingIndicator.setVisibility(View.VISIBLE);
                             mainHandler.removeCallbacks(updateRecordingClock);
                             mainHandler.post(updateRecordingClock);
@@ -703,6 +720,7 @@ public final class MainActivity extends Activity {
     private void finishVideoNow() {
         mainHandler.removeCallbacks(finishVideo);
         stopVideoScheduled = false;
+        videoStartPending = false;
         if (!recording || !recorderStarted) return;
         recording = false;
         recorderStarted = false;
@@ -732,6 +750,7 @@ public final class MainActivity extends Activity {
             recorderStarted = false;
             stopVideoRequested = false;
             stopVideoScheduled = false;
+            videoStartPending = false;
             releaseRecorder(false);
             releaseRecordingWakeLock();
             releaseDisplayWakeLock();
@@ -748,6 +767,7 @@ public final class MainActivity extends Activity {
         recorderStarted = false;
         stopVideoRequested = false;
         stopVideoScheduled = false;
+        videoStartPending = false;
         releaseRecorder(false);
         releaseRecordingWakeLock();
         releaseDisplayWakeLock();
@@ -808,46 +828,31 @@ public final class MainActivity extends Activity {
     }
 
     private boolean handleTouch(MotionEvent event) {
+        lastTouchEventAt = SystemClock.elapsedRealtime();
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             touchDownX = event.getX();
             touchDownY = event.getY();
-            touchLongActivated = false;
-            mainHandler.removeCallbacks(touchLongPress);
-            mainHandler.postDelayed(touchLongPress, 700L);
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
-            if (Math.abs(event.getX() - touchDownX) > dp(22) ||
-                    Math.abs(event.getY() - touchDownY) > dp(22)) {
-                mainHandler.removeCallbacks(touchLongPress);
-            }
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-            mainHandler.removeCallbacks(touchLongPress);
-            float dx = event.getX() - touchDownX;
-            float dy = event.getY() - touchDownY;
-            if (touchLongActivated) {
-                // A long press starts recording. Releasing it must not stop the video;
-                // the next short press is the deliberate stop action.
-            } else if (recording) {
-                stopVideo();
-            } else if (Math.abs(dx) > dp(55) && Math.abs(dx) > Math.abs(dy)) {
-                changeZoom(dx > 0 ? 1 : -1);
-            } else if (Math.abs(dx) < dp(18) && Math.abs(dy) < dp(18)) {
-                takePhoto();
-            }
+            int delta = TouchGesture.zoomDelta(touchDownX, touchDownY,
+                    event.getX(), event.getY(), dp(55), recording);
+            if (delta != 0) changeZoom(delta);
             return true;
         }
-        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-            mainHandler.removeCallbacks(touchLongPress);
-            return true;
-        }
+        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) return true;
         return true;
     }
 
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
         Log.d(TAG, "onKeyDown key=" + keyCode + " repeat=" + event.getRepeatCount());
+        if (keyCode == KeyEvent.KEYCODE_NOTIFICATION) {
+            lastTouchEventAt = SystemClock.elapsedRealtime();
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
             if (event.getRepeatCount() == 0) changeZoom(1);
             return true;
@@ -856,8 +861,7 @@ public final class MainActivity extends Activity {
             if (event.getRepeatCount() == 0) changeZoom(-1);
             return true;
         }
-        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY ||
-                keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY) {
             if (event.getRepeatCount() == 0) buttonDownAt = SystemClock.elapsedRealtime();
             else if (!longPressHandled && event.isLongPress()) { longPressHandled = true; startVideo(); }
             return true;
@@ -867,8 +871,11 @@ public final class MainActivity extends Activity {
 
     @Override public boolean onKeyUp(int keyCode, KeyEvent event) {
         Log.d(TAG, "onKeyUp key=" + keyCode + " longHandled=" + longPressHandled);
-        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY ||
-                keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+        if (keyCode == KeyEvent.KEYCODE_NOTIFICATION || keyCode == KeyEvent.KEYCODE_ENTER ||
+                keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY) {
             if (recording && !longPressHandled) stopVideo();
             else if (!recording && !longPressHandled) takePhoto();
             longPressHandled = false;
@@ -879,10 +886,22 @@ public final class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (requestCode == CAMERA_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-            openCamera();
-        } else {
-            setStatus("カメラの許可が必要です");
+        if (requestCode == CAMERA_PERMISSION) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                openCamera();
+            } else {
+                setStatus("カメラの許可が必要です");
+            }
+            return;
+        }
+        if (requestCode == AUDIO_PERMISSION) {
+            boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                startVideo();
+            } else {
+                videoStartPending = false;
+                setStatus("動画撮影にはマイクの許可が必要です");
+            }
         }
     }
 
