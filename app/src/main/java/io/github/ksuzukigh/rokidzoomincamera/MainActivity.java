@@ -849,6 +849,10 @@ public final class MainActivity extends Activity {
 
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
         Log.d(TAG, "onKeyDown key=" + keyCode + " repeat=" + event.getRepeatCount());
+        if (keyCode == KeyEvent.KEYCODE_NOTIFICATION) {
+            lastTouchEventAt = SystemClock.elapsedRealtime();
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
             if (event.getRepeatCount() == 0) changeZoom(1);
             return true;
@@ -857,8 +861,7 @@ public final class MainActivity extends Activity {
             if (event.getRepeatCount() == 0) changeZoom(-1);
             return true;
         }
-        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY ||
-                keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY) {
             if (event.getRepeatCount() == 0) buttonDownAt = SystemClock.elapsedRealtime();
             else if (!longPressHandled && event.isLongPress()) { longPressHandled = true; startVideo(); }
             return true;
@@ -868,8 +871,11 @@ public final class MainActivity extends Activity {
 
     @Override public boolean onKeyUp(int keyCode, KeyEvent event) {
         Log.d(TAG, "onKeyUp key=" + keyCode + " longHandled=" + longPressHandled);
-        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY ||
-                keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+        if (keyCode == KeyEvent.KEYCODE_NOTIFICATION || keyCode == KeyEvent.KEYCODE_ENTER ||
+                keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_STEM_PRIMARY) {
             if (recording && !longPressHandled) stopVideo();
             else if (!recording && !longPressHandled) takePhoto();
             longPressHandled = false;
