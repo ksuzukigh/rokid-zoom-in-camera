@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Apk = Join-Path $ScriptDir "Rokid-ZOOM-IN-CAMERA.apk"
@@ -61,10 +61,6 @@ $Serial = $null
 for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
     $Serial = Find-Rokid
     if ($Serial) { break }
-    $Devices = (& $Adb devices) -join "`n"
-    if ($Devices -match '\sunauthorized\s*$') {
-        Write-Host "Rokidに確認画面が出たら、USB接続を許可してください。"
-    }
     Start-Sleep -Seconds 1
 }
 

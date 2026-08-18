@@ -69,9 +69,6 @@ SERIAL=""
 for _ in $(seq 1 60); do
     SERIAL="$(find_rokid || true)"
     [ -n "$SERIAL" ] && break
-    if "$ADB" devices </dev/null | awk 'NR > 1 && $2 == "unauthorized" { found=1 } END { exit !found }'; then
-        echo "Rokidに確認画面が出たら、USB接続を許可してください。"
-    fi
     sleep 1
 done
 
