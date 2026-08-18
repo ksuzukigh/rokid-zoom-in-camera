@@ -204,6 +204,10 @@ public final class MainActivity extends Activity {
                 "RokidZoomInCamera:keep-recording-visible");
         displayWakeLock.setReferenceCounted(false);
         buildScreen();
+        new Thread(
+                () -> LegacyVideoMigrator.copyForHiRokid(getApplicationContext()),
+                "RokidZoomInVideoMigration"
+        ).start();
     }
 
     private void buildScreen() {
@@ -600,7 +604,7 @@ public final class MainActivity extends Activity {
             ContentValues values = new ContentValues();
             values.put(MediaStore.Images.Media.DISPLAY_NAME, name);
             values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-            values.put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/Camera");
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, MediaPaths.PHOTO_PATH);
             values.put(MediaStore.Images.Media.IS_PENDING, 1);
             Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
             if (uri == null) throw new IllegalStateException("MediaStore insert failed");
@@ -651,7 +655,7 @@ public final class MainActivity extends Activity {
             values.put(MediaStore.Video.Media.DISPLAY_NAME, "RokidZoomIn_" + timestamp() + "_" +
                     String.format(Locale.US, "%.1fx.mp4", ZOOM_STEPS[zoomIndex]));
             values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
-            values.put(MediaStore.Video.Media.RELATIVE_PATH, "DCIM/Camera");
+            values.put(MediaStore.Video.Media.RELATIVE_PATH, MediaPaths.VIDEO_PATH);
             values.put(MediaStore.Video.Media.IS_PENDING, 1);
             pendingVideo = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
             if (pendingVideo == null) throw new IllegalStateException("MediaStore insert failed");
