@@ -87,6 +87,7 @@ public final class MainActivity extends Activity {
     private Rect sensorRect;
     private float maximumZoom = 1f;
     private int sensorOrientation;
+    private boolean videoStabilizationSupported;
     private int zoomIndex = 0;
     private boolean opening;
     private boolean resumed;
@@ -423,6 +424,10 @@ public final class MainActivity extends Activity {
             CameraManager manager = getSystemService(CameraManager.class);
             String cameraId = findBackCamera(manager);
             characteristics = manager.getCameraCharacteristics(cameraId);
+            videoStabilizationSupported = VideoStabilization.isSupported(
+                    characteristics.get(
+                            CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES));
+            Log.i(TAG, "Video stabilization supported=" + videoStabilizationSupported);
             sensorRect = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
             Float max = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
             maximumZoom = max == null ? 1f : max;
@@ -513,6 +518,15 @@ public final class MainActivity extends Activity {
         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
         if (sensorRect != null) builder.set(CaptureRequest.SCALER_CROP_REGION,
                 ZoomMath.crop(sensorRect, ZOOM_STEPS[zoomIndex], maximumZoom));
+    }
+
+    private void setVideoControls(CaptureRequest.Builder builder) {
+        setCommonControls(builder);
+        if (!videoStabilizationSupported) return;
+        builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON);
+        builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
     }
 
     private void changeZoom(int direction) {
@@ -667,7 +681,7 @@ public final class MainActivity extends Activity {
             repeatingBuilder = device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
             repeatingBuilder.addTarget(previewSurface);
             repeatingBuilder.addTarget(recordSurface);
-            setCommonControls(repeatingBuilder);
+            setVideoControls(repeatingBuilder);
             device.createCaptureSession(Arrays.asList(previewSurface, recordSurface), new CameraCaptureSession.StateCallback() {
                 @Override public void onConfigured(CameraCaptureSession value) {
                     if (!recording || camera == null) { value.close(); return; }
