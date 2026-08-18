@@ -114,9 +114,11 @@ Rokid AI Glasses RV101で、遠くの文字や小さな物を1.0〜4.0倍に拡�
 ## 用意するもの
 
 - **Rokid AI Glasses RV101**
-- **Hi Rokidを入れたAndroidスマートフォン**
+- **Hi Rokidを入れたAndroidスマートフォン（実機確認済み）**
 
-PC、Googleドライブ、開発用5ピンケーブル、開発者モード（ADB）は必要ありません。
+Windows PC、Mac、Googleドライブ、開発用5ピンケーブル、開発者モード（ADB）は必要ありません。
+
+この手順はAndroidスマートフォンで実機確認済みです。iPhoneから同じ方法でインストールできるかは未確認です。
 
 ## Androidスマートフォンからインストール
 
@@ -137,11 +139,11 @@ PC、Googleドライブ、開発用5ピンケーブル、開発者モード（AD
 
 Hi Rokidの画面名は、アプリのバージョンや表示言語によって異なる場合があります。
 
-## PCでAPKをダウンロードした場合
+## Windows PCまたはMacでAPKをダウンロードした場合
 
-PCでダウンロードしたAPKをGoogleドライブへアップロードすると、スマートフォンへケーブルでコピーする必要がありません。
+Windows PCまたはMacでダウンロードしたAPKをGoogleドライブへアップロードすると、スマートフォンへケーブルでコピーする必要がありません。
 
-1. PCで[最新版APK](https://github.com/ksuzukigh/rokid-zoom-in-camera/releases/latest/download/Rokid-ZOOM-IN-CAMERA.apk)をダウンロードします。
+1. Windows PCまたはMacで[最新版APK](https://github.com/ksuzukigh/rokid-zoom-in-camera/releases/latest/download/Rokid-ZOOM-IN-CAMERA.apk)をダウンロードします。
 2. `Rokid-ZOOM-IN-CAMERA.apk`をGoogleドライブへアップロードします。
 3. AndroidスマートフォンでHi Rokidの「メガネのアプリ管理」を開き、「新しいアプリをインストール」を押します。
 4. ファイル選択画面でGoogleドライブを選び、アップロードしたAPKを選びます。
@@ -204,7 +206,7 @@ Hi Rokidの画面構成はバージョンによって変わる場合がありま
 - AndroidスマートフォンのブラウザーでAPKのダウンロードが完了しているか確認します。
 - ファイル名の末尾が`.apk`であることを確認します。
 - Hi Rokidのファイル選択画面で「最近」または「ダウンロード」を開きます。
-- PCからGoogleドライブ経由で渡した場合は、アップロード先のGoogleアカウントの「ドライブ」を選びます。
+- Windows PCまたはMacからGoogleドライブ経由で渡した場合は、アップロード先のGoogleアカウントの「ドライブ」を選びます。
 
 ### PC用インストーラーがRokidを見つけられない
 
