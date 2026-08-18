@@ -1,6 +1,6 @@
 # Rokid ZOOM IN CAMERA
 
-Rokid AI Glasses RV101で、遠くの文字や小さな物を1.0〜4.0倍に拡大して、写真や動画を撮影するためのカメラアプリです。
+Rokid AI Glasses RV101で、遠くの文字や小さな物を1.0〜4.0倍に拡大して見るためのカメラアプリです。
 
 見えている倍率のまま写真や音声付き動画を撮影し、スマートフォンのHi Rokidへ取り込めます。
 
@@ -114,16 +114,20 @@ Rokid AI Glasses RV101で、遠くの文字や小さな物を1.0〜4.0倍に拡�
 ## 用意するもの
 
 - **Rokid AI Glasses RV101**
-- **Hi Rokidを入れたAndroidスマートフォン**
+- **Hi Rokidを入れたスマートフォン**
+- **Googleドライブ**
 
-PC、Googleドライブ、開発用5ピンケーブル、開発者モード（ADB）は必要ありません。
+PC、開発用5ピンケーブル、開発者モード（ADB）は必要ありません。
 
-## Androidスマートフォンからインストール
+## スマートフォンからインストール
 
-### 1. APKをダウンロードする
+### 1. APKをGoogleドライブへ保存する
 
 1. スマートフォンで[最新版APK](https://github.com/ksuzukigh/rokid-zoom-in-camera/releases/latest/download/Rokid-ZOOM-IN-CAMERA.apk)をダウンロードします。
-2. ダウンロード完了後、ファイル名が`Rokid-ZOOM-IN-CAMERA.apk`であることを確認します。
+2. Googleドライブを開き、「新規」または「＋」から「アップロード」を選びます。
+3. スマートフォンの「ダウンロード」にある`Rokid-ZOOM-IN-CAMERA.apk`を選びます。
+
+スマートフォンの表示によっては、ダウンロードしたAPKの「共有」からGoogleドライブへ保存することもできます。
 
 ### 2. Hi RokidからRokidへ入れる
 
@@ -131,20 +135,11 @@ PC、Googleドライブ、開発用5ピンケーブル、開発者モード（AD
 2. 「ホーム」→「ツールボックス」→「メガネのアプリ管理」の順に開きます。
 3. 画面下の「新しいアプリをインストール」を押します。
 4. 案内を確認し、「確認しました。ファイルを選択する」を押します。
-5. 「最近」または「ダウンロード」から、ダウンロードした`Rokid-ZOOM-IN-CAMERA.apk`を選びます。
+5. Googleドライブを選び、保存した`Rokid-ZOOM-IN-CAMERA.apk`を選びます。
 
 インストール後、「メガネのアプリ管理」に「Rokid ZOOM IN CAMERA」が表示されれば完了です。旧バージョンが入っている場合も、アンインストールせずそのまま更新できます。
 
 Hi Rokidの画面名は、アプリのバージョンや表示言語によって異なる場合があります。
-
-## PCでAPKをダウンロードした場合
-
-PCでダウンロードしたAPKをGoogleドライブへアップロードすると、スマートフォンへケーブルでコピーする必要がありません。
-
-1. PCで[最新版APK](https://github.com/ksuzukigh/rokid-zoom-in-camera/releases/latest/download/Rokid-ZOOM-IN-CAMERA.apk)をダウンロードします。
-2. `Rokid-ZOOM-IN-CAMERA.apk`をGoogleドライブへアップロードします。
-3. AndroidスマートフォンでHi Rokidの「メガネのアプリ管理」を開き、「新しいアプリをインストール」を押します。
-4. ファイル選択画面でGoogleドライブを選び、アップロードしたAPKを選びます。
 
 ## 予備：PCと開発用5ピンケーブルからインストール
 
@@ -201,10 +196,9 @@ Hi Rokidの画面構成はバージョンによって変わる場合がありま
 
 ### Hi RokidでAPKを選べない
 
-- AndroidスマートフォンのブラウザーでAPKのダウンロードが完了しているか確認します。
+- APKがGoogleドライブへアップロード済みか確認します。
 - ファイル名の末尾が`.apk`であることを確認します。
-- Hi Rokidのファイル選択画面で「最近」または「ダウンロード」を開きます。
-- PCからGoogleドライブ経由で渡した場合は、アップロード先のGoogleアカウントの「ドライブ」を選びます。
+- Hi Rokidのファイル選択画面で、保存したGoogleアカウントの「ドライブ」を選びます。
 
 ### PC用インストーラーがRokidを見つけられない
 
